@@ -157,7 +157,7 @@ namespace UTNBotApp.Servicios
     }
 }
 
-//19a Paginas/PaginaBot.xaml
+//21a Paginas/PaginaBot.xaml
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://xamarin.com/schemas/2014/forms"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -186,7 +186,7 @@ namespace UTNBotApp.Servicios
     </ContentPage.Content>
 </ContentPage>
 
-//19b Paginas/PaginaBot.xaml.cs
+//21b Paginas/PaginaBot.xaml.cs
 using System;
 using System.Collections.ObjectModel;
 using Xamarin.Forms;
@@ -236,10 +236,10 @@ namespace UTNBotApp.Paginas
     }
 }
 
-//20 App.xaml.cs
+//22 App.xaml.cs
 MainPage = new NavigationPage(new UTNBotApp.Paginas.PaginaBot());
 
-//27 MainApplication.cs (Android)
+//29 MainApplication.cs (Android)
 using System;
 
 using Android.App;
@@ -306,20 +306,20 @@ namespace UTNBotApp.Droid
     }
 }
 
-//29 MainActivity.cs (Android)
+//31 MainActivity.cs (Android)
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Android.Content.PM.Permission[] grantResults)
         {
             Plugin.Permissions.PermissionsImplementation.Current.OnRequestPermissionsResult(requestCode, permissions, grantResults);
         }
 
-//33 Resources/xml/file_paths.xml (Android)
+//35 Resources/xml/file_paths.xml (Android)
 <?xml version="1.0" encoding="utf-8" ?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
   <external-path name="my_images" path="Pictures" />
   <external-path name="my_movies" path="Movies" />
 </paths>
 
-//40 AndroidManifest.xml (Android)
+//42 AndroidManifest.xml (Android)
     <provider android:name="android.support.v4.content.FileProvider"
                  android:authorities="com.companyname.UTNBotApp.fileProvider"
                  android:exported="false"
