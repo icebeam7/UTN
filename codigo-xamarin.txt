@@ -1,0 +1,330 @@
+//15 Helpers/Constantes.cs
+namespace UTNBotApp.Helpers
+{
+    public static class Constantes
+    {
+        public readonly static string BotID = "";
+        public readonly static string DirectLineSecret = "";
+        public readonly static string BotUser = "";
+    }
+}
+
+//16 Modelos/Mensaje.cs
+using Xamarin.Forms;
+using UTNBotApp.Helpers;
+
+namespace UTNBotApp.Modelos
+{
+    public class Mensaje
+    {
+        public string Texto { get; set; }
+        public string Emisor { get; set; }
+
+        public TextAlignment LblMensajeTextAlignment { get; set; }
+        public TextAlignment LblEmisorTextAlignment { get; set; }
+
+        public Mensaje(string texto, string emisor)
+        {
+            Texto = texto;
+            Emisor = emisor;
+
+            if (emisor.ToUpper() == Constantes.BotUser)
+            {
+                LblMensajeTextAlignment = TextAlignment.End;
+                LblEmisorTextAlignment = TextAlignment.End;
+            }
+            else
+            {
+                LblMensajeTextAlignment = TextAlignment.Start;
+                LblEmisorTextAlignment = TextAlignment.Start;
+            }
+        }
+    }
+}
+
+//17 Servicios/ServicioImagen.cs
+using System;
+using System.Threading.Tasks;
+using Plugin.Media;
+using Plugin.Media.Abstractions;
+
+namespace UTNBotApp.Servicios
+{
+    public static class ServicioImagen
+    {
+        public static async Task<MediaFile> TomarFoto()
+        {
+            MediaFile foto = null;
+
+            try
+            {
+                await CrossMedia.Current.Initialize();
+
+                if (CrossMedia.Current.IsCameraAvailable || CrossMedia.Current.IsTakePhotoSupported)
+                {
+                    foto = await CrossMedia.Current.PickPhotoAsync();
+                    /*foto = await CrossMedia.Current.TakePhotoAsync(new StoreCameraMediaOptions
+                    {
+                        Directory = "Pictures",
+                        Name = "imagen.jpg"
+                    });*/
+                }
+            }
+            catch (Exception ex)
+            {
+
+            }
+
+            return foto;
+        }
+    }
+}
+
+//18 Servicios/ServicioDirectLine.cs
+using System.Threading.Tasks;
+using System.Collections.ObjectModel;
+using Microsoft.Bot.Connector.DirectLine;
+using UTNBotApp.Modelos;
+using UTNBotApp.Helpers;
+using System;
+using System.IO;
+
+namespace UTNBotApp.Servicios
+{
+    public class ServicioBotDirectLine
+    {
+        public DirectLineClient ClienteDL;
+        public Conversation Conversacion;
+        public ChannelAccount Cuenta;
+
+        public ServicioBotDirectLine(string nombre)
+        {
+            var tokenResponse = new DirectLineClient(Constantes.DirectLineSecret).Tokens.GenerateTokenForNewConversation();
+
+            ClienteDL = new DirectLineClient(tokenResponse.Token);
+            Conversacion = ClienteDL.Conversations.StartConversation();
+            Cuenta = new ChannelAccount { Id = nombre, Name = nombre };
+        }
+
+        public void EnviarImagen(Stream imagen)
+        {
+            try
+            {
+                ClienteDL.Conversations.Upload(Conversacion.ConversationId, imagen, Constantes.BotUser, "image/jpeg");
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        public void EnviarMensaje(string mensaje)
+        {
+            try
+            {
+                var activity = new Activity
+                {
+                    From = Cuenta,
+                    Text = mensaje,
+                    Type = ActivityTypes.Message
+                };
+
+                ClienteDL.Conversations.PostActivity(Conversacion.ConversationId, activity);
+            }
+            catch(Exception ex)
+            {
+
+            }
+        }
+
+        public async Task ObtenerMensajes(ObservableCollection<Mensaje> collection)
+        {
+            string watermark = null;
+
+            while (true)
+            {
+                var set = await ClienteDL.Conversations.GetActivitiesAsync(Conversacion.ConversationId, watermark);
+                watermark = set?.Watermark;
+
+                foreach (var actividad in set.Activities)
+                {
+                    if (actividad.From.Id == Constantes.BotID)
+                        collection.Add(new Mensaje(actividad.Text, actividad.From.Name));
+                }
+
+                await Task.Delay(3000);
+            }
+        }
+    }
+}
+
+//19a Paginas/PaginaBot.xaml
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://xamarin.com/schemas/2014/forms"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="UTNBotApp.Paginas.PaginaBot">
+    <ContentPage.Content>
+        <StackLayout Spacing="10" Padding="10" HorizontalOptions="Fill" VerticalOptions="Fill" Orientation="Vertical">
+            <ListView x:Name="lsvMensajes" VerticalOptions="StartAndExpand" HorizontalOptions="Fill" HasUnevenRows="true">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <ViewCell>
+                            <StackLayout Orientation="Vertical">
+                                <Label VerticalOptions="StartAndExpand" HorizontalOptions="Fill" HorizontalTextAlignment="{Binding LblMensajeTextAlignment}" Text="{Binding Texto}" FontSize="Large"/>
+                                <Label VerticalOptions="End" HorizontalOptions="Fill" HorizontalTextAlignment="{Binding LblEmisorTextAlignment}" TextColor="Accent" Text="{Binding Emisor}" FontSize="Small"/>
+                            </StackLayout>
+                        </ViewCell>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <StackLayout Orientation="Horizontal" HorizontalOptions="FillAndExpand">
+                <Button x:Name="btnImagen" Text="Imagen" WidthRequest="100" Clicked="btnImagen_Clicked" Margin="10"/>
+                <Entry x:Name="txtMensaje" Placeholder="Escribe un mensaje" HorizontalTextAlignment="End" Margin="10" VerticalOptions="End" HorizontalOptions="FillAndExpand"/>
+                <Button x:Name="btnEnviar" Text="Enviar" WidthRequest="100" Clicked="btnEnviar_Clicked" Margin="10"/>
+            </StackLayout>
+        </StackLayout>
+    </ContentPage.Content>
+</ContentPage>
+
+//19b Paginas/PaginaBot.xaml.cs
+using System;
+using System.Collections.ObjectModel;
+using Xamarin.Forms;
+using Xamarin.Forms.Xaml;
+using UTNBotApp.Helpers;
+using UTNBotApp.Modelos;
+using UTNBotApp.Servicios;
+
+namespace UTNBotApp.Paginas
+{
+    [XamlCompilation(XamlCompilationOptions.Compile)]
+    public partial class PaginaBot : ContentPage
+    {
+        ServicioBotDirectLine bot;
+        ObservableCollection<Mensaje> listaMensajes;
+
+        public PaginaBot ()
+        {
+            InitializeComponent ();
+            bot = new ServicioBotDirectLine(Constantes.BotUser);
+            listaMensajes = new ObservableCollection<Mensaje>();
+
+            lsvMensajes.ItemsSource = listaMensajes;
+            bot.ObtenerMensajes(listaMensajes);
+        }
+
+        public async void btnImagen_Clicked(object sender, EventArgs e)
+        {
+            var imagen = await ServicioImagen.TomarFoto();
+            if (imagen != null)
+                bot.EnviarImagen(imagen.GetStream());
+        }
+
+        public void btnEnviar_Clicked(object sender, EventArgs e)
+        {
+            var texto = txtMensaje.Text;
+
+            if (texto.Length > 0)
+            {
+                txtMensaje.Text = "";
+
+                var mensaje = new Mensaje(texto, bot.Cuenta.Name);
+                listaMensajes.Add(mensaje);
+                bot.EnviarMensaje(texto);
+            }
+        }
+    }
+}
+
+//20 App.xaml.cs
+MainPage = new NavigationPage(new UTNBotApp.Paginas.PaginaBot());
+
+//27 MainApplication.cs (Android)
+using System;
+
+using Android.App;
+using Android.OS;
+using Android.Runtime;
+using Plugin.CurrentActivity;
+
+namespace UTNBotApp.Droid
+{
+#if DEBUG
+    [Application(Debuggable = true)]
+#else
+    [Application(Debuggable = false)]
+#endif
+    public class MainApplication : Application, Application.IActivityLifecycleCallbacks
+    {
+        public MainApplication(IntPtr handle, JniHandleOwnership transer)
+          : base(handle, transer)
+        {
+        }
+
+        public override void OnCreate()
+        {
+            base.OnCreate();
+            RegisterActivityLifecycleCallbacks(this);
+        }
+
+        public override void OnTerminate()
+        {
+            base.OnTerminate();
+            UnregisterActivityLifecycleCallbacks(this);
+        }
+
+        public void OnActivityCreated(Activity activity, Bundle savedInstanceState)
+        {
+            CrossCurrentActivity.Current.Activity = activity;
+        }
+
+        public void OnActivityDestroyed(Activity activity)
+        {
+        }
+
+        public void OnActivityPaused(Activity activity)
+        {
+        }
+
+        public void OnActivityResumed(Activity activity)
+        {
+            CrossCurrentActivity.Current.Activity = activity;
+        }
+
+        public void OnActivitySaveInstanceState(Activity activity, Bundle outState)
+        {
+        }
+
+        public void OnActivityStarted(Activity activity)
+        {
+            CrossCurrentActivity.Current.Activity = activity;
+        }
+
+        public void OnActivityStopped(Activity activity)
+        {
+        }
+    }
+}
+
+//29 MainActivity.cs (Android)
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Android.Content.PM.Permission[] grantResults)
+        {
+            Plugin.Permissions.PermissionsImplementation.Current.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+
+//33 Resources/xml/file_paths.xml (Android)
+<?xml version="1.0" encoding="utf-8" ?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <external-path name="my_images" path="Pictures" />
+  <external-path name="my_movies" path="Movies" />
+</paths>
+
+//40 AndroidManifest.xml (Android)
+    <provider android:name="android.support.v4.content.FileProvider"
+                 android:authorities="com.companyname.UTNBotApp.fileProvider"
+                 android:exported="false"
+                 android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                 android:resource="@xml/file_paths">
+      </meta-data>
+    </provider>    
